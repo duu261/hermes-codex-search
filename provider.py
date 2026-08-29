@@ -119,14 +119,24 @@ class CodexWebSearchProvider(WebSearchProvider):
         except (json.JSONDecodeError, UnicodeDecodeError):
             return {"success": False, "error": "Codex Search returned invalid JSON"}
 
-        raw_results = data.get("results") if isinstance(data, dict) else []
-        rows = [
-            _result_row(item, position)
-            for position, item in enumerate(raw_results or [], 1)
-            if isinstance(item, dict)
-        ][:limit]
+        if not isinstance(data, dict):
+            return {"success": False, "error": "Codex Search returned invalid JSON"}
+        if data.get("error") is not None:
+            return {"success": False, "error": "Codex Search returned an error"}
+
+        raw_results = data.get("results")
+        output = data.get("output")
+        if not isinstance(raw_results, list) and not (isinstance(output, str) and output):
+            return {"success": False, "error": "Codex Search returned no results"}
+
+        rows = []
+        for item in raw_results or []:
+            if not isinstance(item, dict):
+                continue
+            rows.append(_result_row(item, len(rows) + 1))
+            if len(rows) >= limit:
+                break
         result: dict[str, Any] = {"success": True, "data": {"web": rows}}
-        output = data.get("output") if isinstance(data, dict) else None
         if isinstance(output, str) and output:
             result["output"] = output
         return result

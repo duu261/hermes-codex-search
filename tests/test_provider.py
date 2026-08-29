@@ -92,6 +92,38 @@ class ProviderTests(unittest.TestCase):
             result = provider.CodexWebSearchProvider().search("test")
         self.assertEqual(result, {"success": False, "error": "Codex Search returned HTTP 502"})
 
+    def test_search_rejects_error_or_empty_success_envelopes(self):
+        with patch.dict("os.environ", {
+            "CODEX_SEARCH_BASE_URL": "https://gateway.example/v1",
+            "CODEX_SEARCH_API_KEY": "secret",
+        }, clear=False):
+            with patch.object(
+                provider.urllib.request,
+                "urlopen",
+                return_value=FakeResponse({"error": "upstream failed"}),
+            ):
+                error_result = provider.CodexWebSearchProvider().search("test")
+            with patch.object(
+                provider.urllib.request,
+                "urlopen",
+                return_value=FakeResponse({}),
+            ):
+                empty_result = provider.CodexWebSearchProvider().search("test")
+
+        self.assertEqual(error_result, {"success": False, "error": "Codex Search returned an error"})
+        self.assertEqual(empty_result, {"success": False, "error": "Codex Search returned no results"})
+
+    def test_search_compacts_positions_after_malformed_entries(self):
+        response = FakeResponse({
+            "results": [None, {"title": "A", "url": "https://a.example"}, "bad", {"title": "B"}],
+        })
+        with patch.dict("os.environ", {
+            "CODEX_SEARCH_BASE_URL": "https://gateway.example/v1",
+            "CODEX_SEARCH_API_KEY": "secret",
+        }, clear=False), patch.object(provider.urllib.request, "urlopen", return_value=response):
+            rows = provider.CodexWebSearchProvider().search("test", 5)["data"]["web"]
+        self.assertEqual([row["position"] for row in rows], [1, 2])
+
     def test_provider_is_search_only_and_exposes_setup(self):
         search = provider.CodexWebSearchProvider()
         self.assertTrue(search.supports_search())
