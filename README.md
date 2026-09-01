@@ -2,6 +2,25 @@
 
 A search-only Hermes Agent backend for a Codex-compatible standalone web-search endpoint.
 
+## This is the `web_search` backend plugin
+
+This repository does **not** add a `codex_web` tool. It registers a provider named
+`codex` for Hermes' existing `web_search` tool:
+
+```text
+Hermes web_search -> provider: codex -> /v1/alpha/search
+```
+
+Use this plugin when you want ordinary Hermes `web_search` calls to route through
+the Codex-compatible search endpoint while keeping Hermes' normal search tool
+shape. It does not provide `open`, `find`, `click`, PDF screenshots, or page
+extraction.
+
+For those Codex-style advanced commands, use
+[Hermes Codex Web](https://github.com/duu261/hermes-codex-web) instead. That is a
+separate standalone tool plugin and registers `codex_web`; it is not a search
+backend.
+
 ## What it does
 
 Hermes keeps the main model and calls its normal `web_search` tool. This plugin sends the query to `/v1/alpha/search`, then returns structured search results to the same Hermes model. It does not generate an answer and does not provide page extraction.
