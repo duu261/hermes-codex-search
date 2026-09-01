@@ -5,3 +5,10 @@ author: Duu
 kind: backend
 provides_web_providers:
   - codex
+requires_env:
+  - name: CODEX_SEARCH_BASE_URL
+    description: "HTTPS base URL for the Codex-compatible search endpoint"
+    secret: false
+  - name: CODEX_SEARCH_API_KEY
+    description: "API key for the Codex-compatible search endpoint"
+    secret: true

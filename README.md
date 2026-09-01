@@ -46,6 +46,11 @@ CODEX_SEARCH_MODEL=gpt-5.4-mini
 
 The base URL must include `/v1`; the plugin appends `/alpha/search`. Never commit credentials.
 
+Remote endpoints must use HTTPS. Plain HTTP is accepted only for local
+development on `localhost`, `127.0.0.1`, or `::1`. The adapter rejects embedded
+credentials, refuses redirects, caps response bodies, and drops result rows
+without a valid HTTP(S) URL.
+
 ## Select search without changing extraction
 
 Set the capability-specific backend:

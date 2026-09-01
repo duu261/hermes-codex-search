@@ -41,8 +41,9 @@ class FakeResponse:
     def __exit__(self, *args):
         return False
 
-    def read(self):
-        return json.dumps(self.payload).encode()
+    def read(self, limit=None):
+        body = json.dumps(self.payload).encode()
+        return body if limit is None else body[:limit]
 
 
 class ProviderTests(unittest.TestCase):
@@ -61,7 +62,7 @@ class ProviderTests(unittest.TestCase):
         with patch.dict("os.environ", {
             "CODEX_SEARCH_BASE_URL": "https://gateway.example/v1",
             "CODEX_SEARCH_API_KEY": "secret",
-        }, clear=False), patch.object(provider.urllib.request, "urlopen", return_value=response) as open_url:
+        }, clear=False), patch.object(provider, "_open_request", return_value=response) as open_url:
             result = provider.CodexWebSearchProvider().search("Python 3.13", 3)
 
         request = open_url.call_args.args[0]
@@ -88,7 +89,7 @@ class ProviderTests(unittest.TestCase):
         with patch.dict("os.environ", {
             "CODEX_SEARCH_BASE_URL": "https://gateway.example/v1",
             "CODEX_SEARCH_API_KEY": "secret",
-        }, clear=False), patch.object(provider.urllib.request, "urlopen", side_effect=error):
+        }, clear=False), patch.object(provider, "_open_request", side_effect=error):
             result = provider.CodexWebSearchProvider().search("test")
         self.assertEqual(result, {"success": False, "error": "Codex Search returned HTTP 502"})
 
@@ -98,14 +99,14 @@ class ProviderTests(unittest.TestCase):
             "CODEX_SEARCH_API_KEY": "secret",
         }, clear=False):
             with patch.object(
-                provider.urllib.request,
-                "urlopen",
+                provider,
+                "_open_request",
                 return_value=FakeResponse({"error": "upstream failed"}),
             ):
                 error_result = provider.CodexWebSearchProvider().search("test")
             with patch.object(
-                provider.urllib.request,
-                "urlopen",
+                provider,
+                "_open_request",
                 return_value=FakeResponse({}),
             ):
                 empty_result = provider.CodexWebSearchProvider().search("test")
@@ -120,9 +121,39 @@ class ProviderTests(unittest.TestCase):
         with patch.dict("os.environ", {
             "CODEX_SEARCH_BASE_URL": "https://gateway.example/v1",
             "CODEX_SEARCH_API_KEY": "secret",
-        }, clear=False), patch.object(provider.urllib.request, "urlopen", return_value=response):
+        }, clear=False), patch.object(provider, "_open_request", return_value=response):
             rows = provider.CodexWebSearchProvider().search("test", 5)["data"]["web"]
-        self.assertEqual([row["position"] for row in rows], [1, 2])
+        self.assertEqual([row["position"] for row in rows], [1])
+
+    def test_transport_requires_https_and_does_not_follow_redirects(self):
+        with patch.dict("os.environ", {
+            "CODEX_SEARCH_BASE_URL": "http://gateway.example/v1",
+            "CODEX_SEARCH_API_KEY": "secret",
+        }, clear=False):
+            result = provider.CodexWebSearchProvider().search("test")
+        self.assertFalse(result["success"])
+        self.assertIn("must use HTTPS", result["error"])
+        handler = provider._NoRedirectHandler()
+        self.assertIsNone(handler.redirect_request(None, None, 302, "Found", {}, "https://other.example"))
+
+    def test_local_http_endpoint_is_allowed_for_development(self):
+        response = FakeResponse({"results": [{"title": "Local", "url": "http://localhost:8000/result"}]})
+        with patch.dict("os.environ", {
+            "CODEX_SEARCH_BASE_URL": "http://localhost:8000/v1",
+            "CODEX_SEARCH_API_KEY": "secret",
+        }, clear=False), patch.object(provider, "_open_request", return_value=response):
+            result = provider.CodexWebSearchProvider().search("test")
+        self.assertTrue(result["success"])
+
+    def test_response_size_is_bounded(self):
+        response = FakeResponse({"results": []})
+        response.read = lambda limit=None: b"x" * (provider.MAX_RESPONSE_BYTES + 1)
+        with patch.dict("os.environ", {
+            "CODEX_SEARCH_BASE_URL": "https://gateway.example/v1",
+            "CODEX_SEARCH_API_KEY": "secret",
+        }, clear=False), patch.object(provider, "_open_request", return_value=response):
+            result = provider.CodexWebSearchProvider().search("test")
+        self.assertEqual(result, {"success": False, "error": "Codex Search response is too large"})
 
     def test_provider_is_search_only_and_exposes_setup(self):
         search = provider.CodexWebSearchProvider()

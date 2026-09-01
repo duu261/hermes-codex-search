@@ -8,11 +8,14 @@ import urllib.error
 import urllib.request
 import uuid
 from typing import Any
+from urllib.parse import urlparse
 
 from agent.web_search_provider import WebSearchProvider
 
 DEFAULT_MODEL = "gpt-5.4-mini"
 MAX_LIMIT = 100
+MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+LOCAL_HTTP_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
 def _env(name: str) -> str:
@@ -28,10 +31,38 @@ def _endpoint(base_url: str) -> str:
     return base_url if base_url.endswith("/alpha/search") else f"{base_url}/alpha/search"
 
 
-def _result_row(item: dict[str, Any], position: int) -> dict[str, Any]:
+def _validate_endpoint(endpoint: str) -> None:
+    parsed = urlparse(endpoint)
+    hostname = (parsed.hostname or "").lower()
+    if parsed.username or parsed.password or not parsed.netloc:
+        raise ValueError("CODEX_SEARCH_BASE_URL must be an absolute URL without embedded credentials")
+    if parsed.scheme == "https":
+        return
+    if parsed.scheme == "http" and hostname in LOCAL_HTTP_HOSTS:
+        return
+    raise ValueError("CODEX_SEARCH_BASE_URL must use HTTPS; HTTP is allowed only for localhost")
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _open_request(request: urllib.request.Request, timeout: float):
+    opener = urllib.request.build_opener(_NoRedirectHandler())
+    return opener.open(request, timeout=timeout)
+
+
+def _result_row(item: dict[str, Any], position: int) -> dict[str, Any] | None:
+    url = item.get("url") or item.get("link")
+    if not isinstance(url, str) or not url.strip():
+        return None
+    parsed = urlparse(url.strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
     row = {
         "title": str(item.get("title") or item.get("name") or ""),
-        "url": str(item.get("url") or item.get("link") or ""),
+        "url": url.strip(),
         "description": str(
             item.get("description")
             or item.get("snippet")
@@ -82,6 +113,11 @@ class CodexWebSearchProvider(WebSearchProvider):
             return {"success": False, "error": "CODEX_SEARCH_BASE_URL is not set"}
         if not api_key:
             return {"success": False, "error": "CODEX_SEARCH_API_KEY is not set"}
+        endpoint = _endpoint(base_url)
+        try:
+            _validate_endpoint(endpoint)
+        except ValueError as exc:
+            return {"success": False, "error": str(exc)}
 
         model = _env("CODEX_SEARCH_MODEL") or DEFAULT_MODEL
         payload = {
@@ -110,8 +146,11 @@ class CodexWebSearchProvider(WebSearchProvider):
         )
 
         try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                data = json.loads(response.read())
+            with _open_request(request, timeout=60) as response:
+                body = response.read(MAX_RESPONSE_BYTES + 1)
+                if len(body) > MAX_RESPONSE_BYTES:
+                    return {"success": False, "error": "Codex Search response is too large"}
+                data = json.loads(body)
         except urllib.error.HTTPError as exc:
             return {"success": False, "error": f"Codex Search returned HTTP {exc.code}"}
         except (urllib.error.URLError, TimeoutError):
@@ -133,7 +172,10 @@ class CodexWebSearchProvider(WebSearchProvider):
         for item in raw_results or []:
             if not isinstance(item, dict):
                 continue
-            rows.append(_result_row(item, len(rows) + 1))
+            row = _result_row(item, len(rows) + 1)
+            if row is None:
+                continue
+            rows.append(row)
             if len(rows) >= limit:
                 break
         result: dict[str, Any] = {"success": True, "data": {"web": rows}}
