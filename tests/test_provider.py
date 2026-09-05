@@ -1,3 +1,4 @@
+import http.client
 import importlib.util
 import io
 import json
@@ -75,6 +76,47 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(result["data"]["web"][0]["position"], 1)
         self.assertNotIn("encrypted_output", result)
         self.assertEqual(result["output"], "search context")
+
+    def test_invalid_configuration_is_rejected_without_exposing_values(self):
+        cases = [
+            ("CODEX_SEARCH_API_KEY", "fixture\nAUDIT_MARKER"),
+            ("CODEX_SEARCH_API_KEY", "fixture\rAUDIT_MARKER"),
+            ("CODEX_SEARCH_API_KEY", "fixture\x7fAUDIT_MARKER"),
+            ("CODEX_SEARCH_BASE_URL", "https://user:AUDIT_MARKER@gateway.example/v1"),
+            ("CODEX_SEARCH_BASE_URL", "https://gateway.example:AUDIT_MARKER/v1"),
+            ("CODEX_SEARCH_BASE_URL", "https://[AUDIT_MARKER/v1"),
+            ("CODEX_SEARCH_BASE_URL", "https://gateway.example/bad path/AUDIT_MARKER"),
+            ("CODEX_SEARCH_BASE_URL", "https://gateway.example/\nAUDIT_MARKER"),
+        ]
+        for field, value in cases:
+            with self.subTest(field=field, case=cases.index((field, value))):
+                env = {"CODEX_SEARCH_BASE_URL": "https://gateway.example/v1", "CODEX_SEARCH_API_KEY": "fixture"}
+                env[field] = value
+                with patch.dict("os.environ", env, clear=True), patch.object(provider, "_open_request", return_value=FakeResponse({"results": [{"url": "https://example.com"}]})) as transport:
+                    try:
+                        result = provider.CodexWebSearchProvider().search("test")
+                    except (ValueError, http.client.InvalidURL) as exc:
+                        self.fail(f"configuration escaped as {type(exc).__name__}")
+                self.assertFalse(result["success"])
+                self.assertNotIn("AUDIT_MARKER", json.dumps(result))
+                transport.assert_not_called()
+
+    def test_request_errors_do_not_expose_configuration_values(self):
+        errors = [ValueError("AUDIT_MARKER"), http.client.InvalidURL("AUDIT_MARKER"),
+                  UnicodeEncodeError("latin-1", "AUDIT_MARKER", 0, 1, "fixture")]
+        for stage in ("Request", "_open_request"):
+            owner = provider.urllib.request if stage == "Request" else provider
+            for error in errors:
+                with self.subTest(stage=stage, error=type(error).__name__):
+                    env = {"CODEX_SEARCH_BASE_URL": "https://gateway.example/v1", "CODEX_SEARCH_API_KEY": "fixture"}
+                    with patch.dict("os.environ", env, clear=True), patch.object(owner, stage, side_effect=error) as fault:
+                        try:
+                            result = provider.CodexWebSearchProvider().search("test")
+                        except (ValueError, http.client.InvalidURL) as exc:
+                            self.fail(f"request error escaped as {type(exc).__name__}")
+                    self.assertEqual(result, {"success": False, "error": "Codex Search request configuration is invalid"})
+                    self.assertNotIn("AUDIT_MARKER", json.dumps(result))
+                    fault.assert_called_once()
 
     def test_search_requires_configuration(self):
         with patch.dict("os.environ", {}, clear=True):

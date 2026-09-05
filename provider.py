@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import urllib.error
@@ -32,9 +33,15 @@ def _endpoint(base_url: str) -> str:
 
 
 def _validate_endpoint(endpoint: str) -> None:
-    parsed = urlparse(endpoint)
-    hostname = (parsed.hostname or "").lower()
-    if parsed.username or parsed.password or not parsed.netloc:
+    if any(ord(char) <= 32 or ord(char) == 127 for char in endpoint):
+        raise ValueError("CODEX_SEARCH_BASE_URL must not contain whitespace or control characters")
+    try:
+        parsed = urlparse(endpoint)
+        hostname = (parsed.hostname or "").lower()
+        _ = parsed.port  # Validate the port without echoing parser exceptions.
+    except ValueError:
+        raise ValueError("CODEX_SEARCH_BASE_URL must be a valid absolute URL") from None
+    if parsed.username is not None or parsed.password is not None or not hostname:
         raise ValueError("CODEX_SEARCH_BASE_URL must be an absolute URL without embedded credentials")
     if parsed.scheme == "https":
         return
@@ -113,6 +120,8 @@ class CodexWebSearchProvider(WebSearchProvider):
             return {"success": False, "error": "CODEX_SEARCH_BASE_URL is not set"}
         if not api_key:
             return {"success": False, "error": "CODEX_SEARCH_API_KEY is not set"}
+        if any(ord(char) < 32 or ord(char) == 127 for char in api_key):
+            return {"success": False, "error": "CODEX_SEARCH_API_KEY must not contain control characters"}
         endpoint = _endpoint(base_url)
         try:
             _validate_endpoint(endpoint)
@@ -134,18 +143,17 @@ class CodexWebSearchProvider(WebSearchProvider):
                 "external_web_access": True,
             },
         }
-        request = urllib.request.Request(
-            _endpoint(base_url),
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Accept": "application/json",
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-
         try:
+            request = urllib.request.Request(
+                endpoint,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Accept": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
             with _open_request(request, timeout=60) as response:
                 body = response.read(MAX_RESPONSE_BYTES + 1)
                 if len(body) > MAX_RESPONSE_BYTES:
@@ -157,6 +165,8 @@ class CodexWebSearchProvider(WebSearchProvider):
             return {"success": False, "error": "Could not reach Codex Search"}
         except (json.JSONDecodeError, UnicodeDecodeError):
             return {"success": False, "error": "Codex Search returned invalid JSON"}
+        except (ValueError, http.client.InvalidURL):
+            return {"success": False, "error": "Codex Search request configuration is invalid"}
 
         if not isinstance(data, dict):
             return {"success": False, "error": "Codex Search returned invalid JSON"}
