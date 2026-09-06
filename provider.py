@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 
 from agent.web_search_provider import WebSearchProvider
 
-DEFAULT_MODEL = "gpt-5.4-mini"
+DEFAULT_MODEL = "gpt-5.6-luna"
 MAX_LIMIT = 100
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 LOCAL_HTTP_HOSTS = {"localhost", "127.0.0.1", "::1"}

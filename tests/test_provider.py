@@ -69,7 +69,7 @@ class ProviderTests(unittest.TestCase):
         request = open_url.call_args.args[0]
         body = json.loads(request.data)
         self.assertEqual(request.full_url, "https://gateway.example/v1/alpha/search")
-        self.assertEqual(body["model"], "gpt-5.4-mini")
+        self.assertEqual(body["model"], "gpt-5.6-luna")
         self.assertEqual(body["commands"]["search_query"], [{"q": "Python 3.13"}])
         self.assertEqual(result["data"]["web"][0]["title"], "Python 3.13")
         self.assertEqual(result["data"]["web"][0]["description"], "Release notes")

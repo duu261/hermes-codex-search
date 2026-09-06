@@ -25,7 +25,7 @@ backend.
 
 Hermes keeps the main model and calls its normal `web_search` tool. This plugin sends the query to `/v1/alpha/search`, then returns structured search results to the same Hermes model. It does not generate an answer and does not provide page extraction.
 
-The endpoint requires a `model` field. The default is `gpt-5.4-mini`; override it with `CODEX_SEARCH_MODEL` when the gateway uses another compatible model. This field identifies the search request for routing and billing. It does not start a second model-completion turn.
+The endpoint requires a `model` field. The default is `gpt-5.6-luna`; override it with `CODEX_SEARCH_MODEL` when the gateway uses another compatible model. This field identifies the search request for routing and billing. It does not start a second model-completion turn.
 
 ## Install
 
@@ -41,7 +41,7 @@ Set the endpoint and credential in Hermes' private environment file:
 CODEX_SEARCH_BASE_URL=https://gateway.example/v1
 CODEX_SEARCH_API_KEY=replace-me
 # Optional:
-CODEX_SEARCH_MODEL=gpt-5.4-mini
+CODEX_SEARCH_MODEL=gpt-5.6-luna
 ```
 
 The base URL must include `/v1`; the plugin appends `/alpha/search`. Never commit credentials.
