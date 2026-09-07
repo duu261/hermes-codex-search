@@ -151,6 +151,7 @@ class CodexWebSearchProvider(WebSearchProvider):
                     "Accept": "application/json",
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
+                    "User-Agent": "hermes-codex-search/0.1",
                 },
                 method="POST",
             )
