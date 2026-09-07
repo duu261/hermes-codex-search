@@ -67,6 +67,7 @@ class ProviderTests(unittest.TestCase):
             result = provider.CodexWebSearchProvider().search("Python 3.13", 3)
 
         request = open_url.call_args.args[0]
+        self.assertTrue(request.get_header("User-agent").startswith("hermes-codex-search/"))
         body = json.loads(request.data)
         self.assertEqual(request.full_url, "https://gateway.example/v1/alpha/search")
         self.assertEqual(body["model"], "gpt-5.6-luna")

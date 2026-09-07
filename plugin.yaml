@@ -1,5 +1,5 @@
 name: web-codex
-version: 0.1.0
+version: 0.1.1
 description: "Search-only Hermes backend for a Codex-compatible standalone web-search endpoint."
 author: Duu
 kind: backend
