@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 
 from agent.web_search_provider import WebSearchProvider
 
-DEFAULT_MODEL = "gpt-5.6-luna"
+DEFAULT_MODEL = "gpt-5.6-sol"
 MAX_LIMIT = 100
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 LOCAL_HTTP_HOSTS = {"localhost", "127.0.0.1", "::1"}
@@ -151,7 +151,7 @@ class CodexWebSearchProvider(WebSearchProvider):
                     "Accept": "application/json",
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
-                    "User-Agent": "hermes-codex-search/0.1.1",
+                    "User-Agent": "hermes-codex-search/0.1.2",
                 },
                 method="POST",
             )

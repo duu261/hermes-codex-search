@@ -70,7 +70,7 @@ class ProviderTests(unittest.TestCase):
         self.assertTrue(request.get_header("User-agent").startswith("hermes-codex-search/"))
         body = json.loads(request.data)
         self.assertEqual(request.full_url, "https://gateway.example/v1/alpha/search")
-        self.assertEqual(body["model"], "gpt-5.6-luna")
+        self.assertEqual(body["model"], "gpt-5.6-sol")
         self.assertEqual(body["commands"]["search_query"], [{"q": "Python 3.13"}])
         self.assertEqual(result["data"]["web"][0]["title"], "Python 3.13")
         self.assertEqual(result["data"]["web"][0]["description"], "Release notes")
