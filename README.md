@@ -1,5 +1,7 @@
 # Hermes Codex Search
 
+English | [Tiếng Việt](README.vi.md) | [简体中文](README.zh-CN.md)
+
 A search-only Hermes Agent backend for a Codex-compatible standalone web-search endpoint.
 
 ## This is the `web_search` backend plugin
